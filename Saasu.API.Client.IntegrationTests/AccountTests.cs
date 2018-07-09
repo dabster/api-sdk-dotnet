@@ -9,18 +9,18 @@ namespace Saasu.API.Client.IntegrationTests
 	[TestFixture]
 	public class AccountTests
 	{
-		private int _nonBankAcctId;
-		private int _bankAcctId;
-		private int _accountToBeUpdated;
-		private int _bankAccountToBeUpdated;
-		private int _inactiveAccountId;
-        private int _headerAccountId;
-        private int _accountToAssignToHeaderAccount;
+		//private int _nonBankAcctId;
+		//private int _bankAcctId;
+		//private int _accountToBeUpdated;
+		//private int _bankAccountToBeUpdated;
+		//private int _inactiveAccountId;
+  //      private int _headerAccountId;
+  //      private int _accountToAssignToHeaderAccount;
 
 
 		public AccountTests()
 		{
-			CreateTestData();
+			//CreateTestData();
 		}
 
 		[Test]
@@ -37,8 +37,10 @@ namespace Saasu.API.Client.IntegrationTests
 		[Test]
 		public void GetNonBankAccount()
 		{
-			var accountsProxy = new AccountProxy();
-			var response = accountsProxy.GetAccount(_nonBankAcctId);
+		    var accountId = CreateNonBankAccount();
+
+            var accountsProxy = new AccountProxy();
+			var response = accountsProxy.GetAccount(accountId);
 
 			Assert.IsNotNull(response, "Reponse is null");
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
@@ -48,8 +50,9 @@ namespace Saasu.API.Client.IntegrationTests
 		[Test]
 		public void GetBankAccount()
 		{
+		    var accountId = CreateBankAccount();
 			var accountsProxy = new AccountProxy();
-			var response = accountsProxy.GetAccount(_bankAcctId);
+			var response = accountsProxy.GetAccount(accountId);
 
 			Assert.IsNotNull(response, "Reponse is null");
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
@@ -152,13 +155,16 @@ namespace Saasu.API.Client.IntegrationTests
         [Test]
         public void GetAccountsFilterOnHeaderAccountId()
         {
+            var headerAccountId = CreateTestHeaderAccount();
+            var assignedAccountId = CreateAndAssignTestAccountToHeaderAccount(headerAccountId);
+
             var accountsProxy = new AccountsProxy();
-            var response = accountsProxy.GetAccounts(headerAccountId: _headerAccountId);
+            var response = accountsProxy.GetAccounts(headerAccountId: headerAccountId);
 
             Assert.IsNotNull(response, "Reponse is null");
             Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
             Assert.AreEqual(response.DataObject.Accounts.Count, 1, "Incorrect number of accounts returned");
-            Assert.AreEqual(response.DataObject.Accounts[0].Id, _accountToAssignToHeaderAccount, "Incorrect account assigned to header account.");
+            Assert.AreEqual(response.DataObject.Accounts[0].Id, assignedAccountId, "Incorrect account assigned to header account.");
         }
 
 		[Test]
@@ -250,6 +256,25 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.AreEqual(acct.DataObject.IncludePendingTransactions, account.IncludePendingTransactions, "IncludePendingTransactions not equal");
 		}
 
+
+        [Test]
+        public void CanNotInsertPendingBankAccount()
+        {
+
+            var nameGuid = Guid.NewGuid();
+            //Create and Insert
+            var account = GetTestBankAccount();
+            account.AccountType = "Pending";
+            account.Name = $"Pending_{nameGuid}";
+            account.BankAccountName = $"Pending_{nameGuid}";
+
+            var accountProxy = new AccountProxy();
+            var response = accountProxy.InsertAccount(account);
+
+            Assert.IsNotNull(response, "Reponse is null");
+            Assert.IsFalse(response.IsSuccessfull, "Reponse has not been successful");
+        }
+
         [Test]
         public void InsertAccountWithHeader()
         {
@@ -313,10 +338,11 @@ namespace Saasu.API.Client.IntegrationTests
 		[Test]
 		public void UpdateAccount()
 		{
+		    var accountToUpdateId = CreateNonBankAccount();
 			var accountProxy = new AccountProxy();
 
 			//Get account, change name then update.
-			var acct = accountProxy.GetAccount(_accountToBeUpdated);
+			var acct = accountProxy.GetAccount(accountToUpdateId);
 
 			var newName = string.Format("UpdatedAccount_{0}", Guid.NewGuid());
 
@@ -338,7 +364,7 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
 
 			//Get account again and verify change.
-			acct = accountProxy.GetAccount(_accountToBeUpdated);
+			acct = accountProxy.GetAccount(accountToUpdateId);
 
 			Assert.IsNotNull(acct, "Account is null");
 			Assert.AreEqual(acct.DataObject.Name, newName, "Names not equal");
@@ -350,13 +376,58 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.AreEqual(acct.DataObject.IncludeInForecaster, false, "Include in Forecaster should be false for non bank accounts");
 		}
 
+        [Test]
+	    public void CannotUpdateToPendingAccountType()
+	    {
+	        var accountProxy = new AccountProxy();
+
+	        var accountToUpdateId = CreateBankAccount();
+	        var bankAccountId = CreateBankAccount();
+
+	        //Get account, change name then update.
+	        var acct = accountProxy.GetAccount(accountToUpdateId);
+
+	        var newName = string.Format("UpdatedAccount_{0}", Guid.NewGuid());
+	        var newBankAccountName = string.Format("Update Bank Account_{0}", Guid.NewGuid());
+
+	        var updatedAccount = new AccountDetail
+	        {
+	            Name = newName,
+	            AccountType = "Pending",
+	            IsActive = false,
+	            IsBankAccount = true,
+	            LastUpdatedId = acct.DataObject.LastUpdatedId,
+	            DefaultTaxCode = null,
+	            Currency = "AUD",
+	            LedgerCode = "BB",
+	            IncludeInForecaster = false,
+	            BSB = "020202",
+	            Number = "22222222",
+	            BankAccountName = newBankAccountName,
+	            BankFileCreationEnabled = true,
+	            BankCode = "B",
+	            UserNumber = "333",
+	            MerchantFeeAccountId = bankAccountId,
+	            IncludePendingTransactions = false
+	        };
+
+	        var response = accountProxy.UpdateAccount(Convert.ToInt32(acct.DataObject.Id), updatedAccount);
+
+
+	        Assert.IsNotNull(response, "Reponse is null");
+	        Assert.IsFalse(response.IsSuccessfull, "Reponse has not been successful");
+        }
+
 		[Test]
 		public void UpdateBankAccount()
 		{
 			var accountProxy = new AccountProxy();
 
-			//Get account, change name then update.
-			var acct = accountProxy.GetAccount(_bankAccountToBeUpdated);
+            var accountToUpdateId = CreateBankAccount();
+		    var bankAccountId = CreateBankAccount();
+
+            //Get account, change name then update.
+            var acct = accountProxy.GetAccount(accountToUpdateId);
 
 			var newName = string.Format("UpdatedAccount_{0}", Guid.NewGuid());
 			var newBankAccountName = string.Format("Update Bank Account_{0}", Guid.NewGuid());
@@ -378,7 +449,7 @@ namespace Saasu.API.Client.IntegrationTests
 				BankFileCreationEnabled = true,
 				BankCode = "B",
 				UserNumber = "333",
-				MerchantFeeAccountId = _bankAcctId,
+				MerchantFeeAccountId = bankAccountId,
 				IncludePendingTransactions = false
 			};
 
@@ -388,7 +459,7 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
 
 			//Get account again and verify change.
-			acct = accountProxy.GetAccount(_bankAccountToBeUpdated);
+			acct = accountProxy.GetAccount(accountToUpdateId);
 
 			Assert.IsNotNull(acct, "Account in null");
 			Assert.AreEqual(acct.DataObject.Name, newName, "Names not equal");
@@ -404,7 +475,7 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.AreEqual(acct.DataObject.BankFileCreationEnabled, true, "BankFileCreationEnabled not equal");
 			Assert.AreEqual(acct.DataObject.BankCode, "B", "Bank codes not equal");
 			Assert.AreEqual(acct.DataObject.UserNumber, "333", "User numbers not equal");
-			Assert.AreEqual(acct.DataObject.MerchantFeeAccountId, _bankAcctId, "Merchant accounts not equal");
+			Assert.AreEqual(acct.DataObject.MerchantFeeAccountId, bankAccountId, "Merchant accounts not equal");
 			Assert.AreEqual(acct.DataObject.IncludePendingTransactions, false, "IncludePendingTransactions not equal");
 		}
 
@@ -412,9 +483,10 @@ namespace Saasu.API.Client.IntegrationTests
 		public void UpdateBankAccountBankFileCreationEnabled()
 		{
 			var accountProxy = new AccountProxy();
+		    var bankAccountId = CreateBankAccount();
 
-			//Get account, change name then update.
-			var acct = accountProxy.GetAccount(_bankAcctId);
+            //Get account, change name then update.
+            var acct = accountProxy.GetAccount(bankAccountId);
 
 			var newBankName = string.Format("UpdatedBankName_{0}", Guid.NewGuid());
 
@@ -429,7 +501,7 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
 
 			//Get account again and verify change.
-			acct = accountProxy.GetAccount(_bankAcctId);
+			acct = accountProxy.GetAccount(bankAccountId);
 
 			Assert.IsNotNull(acct, "Account in null");
 			Assert.AreEqual(acct.DataObject.BankAccountName, newBankName, "Bank account names not equal");
@@ -449,9 +521,9 @@ namespace Saasu.API.Client.IntegrationTests
 		public void UpdateBankAccountBankFileCreationNotEnabled()
 		{
 			var accountProxy = new AccountProxy();
-
-			//Get account, change fields then update.
-			var acct = accountProxy.GetAccount(_bankAcctId);
+		    var bankAccountId = CreateBankAccount();
+            //Get account, change fields then update.
+            var acct = accountProxy.GetAccount(bankAccountId);
 
 			var newBankName = string.Format("UpdatedBankName_{0}", Guid.NewGuid());
 
@@ -466,7 +538,7 @@ namespace Saasu.API.Client.IntegrationTests
 			Assert.IsTrue(response.IsSuccessfull, "Reponse has not been successful");
 
 			//Get account again and verify change.
-			acct = accountProxy.GetAccount(_bankAcctId);
+			acct = accountProxy.GetAccount(bankAccountId);
 
 			Assert.IsNotNull(acct, "Account in null");
 			Assert.AreEqual(acct.DataObject.BankAccountName, newBankName, "Bank account names not equal");
@@ -512,70 +584,106 @@ namespace Saasu.API.Client.IntegrationTests
         }
 
 		#region Test Data
-		private void CreateTestData()
-		{
-			var accountProxy = new AccountProxy();
 
-			if (_nonBankAcctId == 0)
-			{
-				var account = GetTestAccount();
-				var insertResult = accountProxy.InsertAccount(account);
+	    private int CreateNonBankAccount()
+	    {
+	        var accountProxy = new AccountProxy();
 
-				_nonBankAcctId = insertResult.DataObject.InsertedEntityId;
-			}
+            var account = GetTestAccount();
+            return accountProxy.InsertAccount(account).DataObject.InsertedEntityId;
+        }
 
-			if (_bankAcctId == 0)
-			{
-				var account = GetTestBankAccount();
-				var insertResult = accountProxy.InsertAccount(account);
+	    private int CreateBankAccount()
+	    {
+	        var accountProxy = new AccountProxy();
 
-				_bankAcctId = insertResult.DataObject.InsertedEntityId;
-			}
+	        var account = GetTestBankAccount();
+	        return accountProxy.InsertAccount(account).DataObject.InsertedEntityId;
+	    }
 
-			if (_inactiveAccountId == 0)
-			{
-				var account = GetTestAccount();
-				account.IsActive = false;
-				var insertResult = accountProxy.InsertAccount(account);
 
-				_inactiveAccountId = insertResult.DataObject.InsertedEntityId;
-			}
+	    private int CreateTestHeaderAccount()
+	    {
+	        var accountProxy = new AccountProxy();
 
-			if (_accountToBeUpdated == 0)
-			{
-				var account = GetTestAccount();
-				var insertResult = accountProxy.InsertAccount(account);
+            var account = GetTestHeaderAccount();
+            var insertResult = accountProxy.InsertAccount(account);
+            return insertResult.DataObject.InsertedEntityId;
+        }
 
-				_accountToBeUpdated = insertResult.DataObject.InsertedEntityId;
-			}
+	    private int CreateAndAssignTestAccountToHeaderAccount(int headerAccountId)
+	    {
+	        var accountProxy = new AccountProxy();
 
-			if (_bankAccountToBeUpdated == 0)
-			{
-				var account = GetTestBankAccount();
-				var insertResult = accountProxy.InsertAccount(account);
+            var account = GetTestAccount();
+	        account.HeaderAccountId = headerAccountId;
+	        var insertResult = accountProxy.InsertAccount(account);
+	        return insertResult.DataObject.InsertedEntityId;
+	    }
+        //private void CreateTestData()
+        //{
+        //	var accountProxy = new AccountProxy();
 
-				_bankAccountToBeUpdated = insertResult.DataObject.InsertedEntityId;
-			}
+        //	if (_nonBankAcctId == 0)
+        //	{
+        //		var account = GetTestAccount();
+        //		var insertResult = accountProxy.InsertAccount(account);
 
-            if (_headerAccountId == 0)
-            {
-                var account = GetTestHeaderAccount();
-                
-                var insertResult = accountProxy.InsertAccount(account);
+        //		_nonBankAcctId = insertResult.DataObject.InsertedEntityId;
+        //	}
 
-                _headerAccountId = insertResult.DataObject.InsertedEntityId;
-            }
+        //	if (_bankAcctId == 0)
+        //	{
+        //		var account = GetTestBankAccount();
+        //		var insertResult = accountProxy.InsertAccount(account);
 
-		    if (_accountToAssignToHeaderAccount == 0)
-		    {
-		        var account = GetTestAccount();
-		        account.HeaderAccountId = _headerAccountId;
-		        var insertResult = accountProxy.InsertAccount(account);
-		        _accountToAssignToHeaderAccount = insertResult.DataObject.InsertedEntityId;
-		    }
-		}
+        //		_bankAcctId = insertResult.DataObject.InsertedEntityId;
+        //	}
 
-		private AccountDetail GetTestAccount()
+        //	if (_inactiveAccountId == 0)
+        //	{
+        //		var account = GetTestAccount();
+        //		account.IsActive = false;
+        //		var insertResult = accountProxy.InsertAccount(account);
+
+        //		_inactiveAccountId = insertResult.DataObject.InsertedEntityId;
+        //	}
+
+        //	if (_accountToBeUpdated == 0)
+        //	{
+        //		var account = GetTestAccount();
+        //		var insertResult = accountProxy.InsertAccount(account);
+
+        //		_accountToBeUpdated = insertResult.DataObject.InsertedEntityId;
+        //	}
+
+        //	if (_bankAccountToBeUpdated == 0)
+        //	{
+        //		var account = GetTestBankAccount();
+        //		var insertResult = accountProxy.InsertAccount(account);
+
+        //		_bankAccountToBeUpdated = insertResult.DataObject.InsertedEntityId;
+        //	}
+
+        //          if (_headerAccountId == 0)
+        //          {
+        //              var account = GetTestHeaderAccount();
+
+        //              var insertResult = accountProxy.InsertAccount(account);
+
+        //              _headerAccountId = insertResult.DataObject.InsertedEntityId;
+        //          }
+
+        //    if (_accountToAssignToHeaderAccount == 0)
+        //    {
+        //        var account = GetTestAccount();
+        //        account.HeaderAccountId = _headerAccountId;
+        //        var insertResult = accountProxy.InsertAccount(account);
+        //        _accountToAssignToHeaderAccount = insertResult.DataObject.InsertedEntityId;
+        //    }
+        //}
+
+        private AccountDetail GetTestAccount()
 		{
 			return new AccountDetail
 			{
@@ -622,7 +730,9 @@ namespace Saasu.API.Client.IntegrationTests
                 LedgerCode = "AA"
             };
         }
-	}
+
+
+    }
 		#endregion
 }
 
